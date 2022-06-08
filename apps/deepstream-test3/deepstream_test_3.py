@@ -237,7 +237,12 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     pgie = Gst.ElementFactory.make("nvinfer", "primary-inference")
 
     if not pgie:
-        sys.stderr.write(" Unable to create pgie :  %s\n" % requested_pgie)
+        sys.stderr.write(" Unable to create pgie")
+
+    print("Creating Sgie1 \n ")
+    sgie_1 = Gst.ElementFactory.make("nvinfer", "secondary-inference")
+    if not sgie_1:
+        sys.stderr.write(" Unable to create Sgie1")
 
     if disable_probe:
         # Use nvdslogger for perf measurement instead of probe function
@@ -267,18 +272,24 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     streammux.set_property('height', 1080)
     streammux.set_property('batch-size', number_sources)
     streammux.set_property('batched-push-timeout', 4000000)
-    if requested_pgie == "nvinfer" and config != None:
-        pgie.set_property('config-file-path', config)
-    else:
-        pgie.set_property('config-file-path', "dstest3_pgie_config.txt")
+    pgie.set_property('config-file-path', "dstest3_pgie_config.txt")
     pgie_batch_size=pgie.get_property("batch-size")
     if(pgie_batch_size != number_sources):
         print("WARNING: Overriding infer-config batch-size",pgie_batch_size," with number of sources ", number_sources," \n")
         pgie.set_property("batch-size",number_sources)
+
+    sgie_1.set_property('config-file-path', "dstest3_sgie_1_config.txt")
+    sgie_1_batch_size=sgie_1.get_property("batch-size")
+    if(sgie_1_batch_size != number_sources):
+        print("WARNING: Overriding infer-config batch-size",pgie_batch_size," with number of sources ", number_sources," \n")
+        pgie.set_property("batch-size",number_sources)
+
+
     sink.set_property("qos",0)
 
     print("Adding elements to Pipeline \n")
     pipeline.add(pgie)
+    pipeline.add(sgie_1)
     if nvdslogger:
         pipeline.add(nvdslogger)
     pipeline.add(nvvidconv)
