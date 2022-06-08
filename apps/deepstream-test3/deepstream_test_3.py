@@ -22,20 +22,20 @@ silent = False
 file_loop = False
 perf_data = None
 
+# PGIE implements PeopleNet
+
+PRIMARY_DETECTOR_UID = 1
 MAX_DISPLAY_LEN=64
-PGIE_CLASS_ID_VEHICLE = 0
-PGIE_CLASS_ID_BICYCLE = 1
-PGIE_CLASS_ID_PERSON = 2
-PGIE_CLASS_ID_ROADSIGN = 3
+PGIE_CLASS_ID_PERSON = 0
+PGIE_CLASS_ID_BAG = 1
+PGIE_CLASS_ID_FACE = 2
 MUXER_OUTPUT_WIDTH=1920
 MUXER_OUTPUT_HEIGHT=1080
 MUXER_BATCH_TIMEOUT_USEC=4000000
-TILED_OUTPUT_WIDTH=1280
-TILED_OUTPUT_HEIGHT=720
 GST_CAPS_FEATURES_NVMM="memory:NVMM"
 OSD_PROCESS_MODE= 0
 OSD_DISPLAY_TEXT= 1
-pgie_classes_str= ["Vehicle", "TwoWheeler", "Person","RoadSign"]
+pgie_classes_str= ["person", "bag", "face"]
 
 # pgie_src_pad_buffer_probe  will extract metadata received on tiler sink pad
 # and update params for drawing rectangle, object information etc.
@@ -67,10 +67,9 @@ def pgie_src_pad_buffer_probe(pad,info,u_data):
         l_obj=frame_meta.obj_meta_list
         num_rects = frame_meta.num_obj_meta
         obj_counter = {
-        PGIE_CLASS_ID_VEHICLE:0,
         PGIE_CLASS_ID_PERSON:0,
-        PGIE_CLASS_ID_BICYCLE:0,
-        PGIE_CLASS_ID_ROADSIGN:0
+        PGIE_CLASS_ID_BAG:0,
+        PGIE_CLASS_ID_FACE:0
         }
         while l_obj is not None:
             try:
@@ -78,13 +77,16 @@ def pgie_src_pad_buffer_probe(pad,info,u_data):
                 obj_meta=pyds.NvDsObjectMeta.cast(l_obj.data)
             except StopIteration:
                 break
-            obj_counter[obj_meta.class_id] += 1
+
+            if obj_meta.unique_component_id == PRIMARY_DETECTOR_UID:
+                obj_counter[obj_meta.class_id] += 1
+
             try:
                 l_obj=l_obj.next
             except StopIteration:
                 break
         if not silent:
-            print("Frame Number=", frame_number, "Number of Objects=",num_rects,"Vehicle_count=",obj_counter[PGIE_CLASS_ID_VEHICLE],"Person_count=",obj_counter[PGIE_CLASS_ID_PERSON])
+            print("Frame Number=", frame_number, "Number of Objects=",num_rects,"Person_count=",obj_counter[PGIE_CLASS_ID_PERSON])
 
         # Update frame rate through this probe
         stream_index = "stream{0}".format(frame_meta.pad_index)
@@ -331,6 +333,9 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     # cleanup
     print("Exiting app\n")
     pipeline.set_state(Gst.State.NULL)
+
+
+# configuration function block
 
 def parse_args():
 
