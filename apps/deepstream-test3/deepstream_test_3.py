@@ -1,22 +1,3 @@
-#!/usr/bin/env python3
-
-################################################################################
-# SPDX-FileCopyrightText: Copyright (c) 2019-2022 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
-# SPDX-License-Identifier: Apache-2.0
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-################################################################################
-
 import sys
 sys.path.append('../')
 from pathlib import Path
@@ -92,13 +73,13 @@ def pgie_src_pad_buffer_probe(pad,info,u_data):
         PGIE_CLASS_ID_ROADSIGN:0
         }
         while l_obj is not None:
-            try: 
+            try:
                 # Casting l_obj.data to pyds.NvDsObjectMeta
                 obj_meta=pyds.NvDsObjectMeta.cast(l_obj.data)
             except StopIteration:
                 break
             obj_counter[obj_meta.class_id] += 1
-            try: 
+            try:
                 l_obj=l_obj.next
             except StopIteration:
                 break
@@ -233,7 +214,7 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
             sys.stderr.write("Unable to create source bin \n")
         pipeline.add(source_bin)
         padname="sink_%u" %i
-        sinkpad= streammux.get_request_pad(padname) 
+        sinkpad= streammux.get_request_pad(padname)
         if not sinkpad:
             sys.stderr.write("Unable to create sink pad bin \n")
         srcpad=source_bin.get_static_pad("src")
@@ -255,12 +236,7 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     transform = None
 
     print("Creating Pgie \n ")
-    if requested_pgie != None and (requested_pgie == 'nvinferserver' or requested_pgie == 'nvinferserver-grpc') :
-        pgie = Gst.ElementFactory.make("nvinferserver", "primary-inference")
-    elif requested_pgie != None and requested_pgie == 'nvinfer':
-        pgie = Gst.ElementFactory.make("nvinfer", "primary-inference")
-    else:
-        pgie = Gst.ElementFactory.make("nvinfer", "primary-inference")
+    pgie = Gst.ElementFactory.make("nvinfer", "primary-inference")
 
     if not pgie:
         sys.stderr.write(" Unable to create pgie :  %s\n" % requested_pgie)
@@ -270,20 +246,11 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
         print ("Creating nvdslogger \n")
         nvdslogger = Gst.ElementFactory.make("nvdslogger", "nvdslogger")
 
-    print("Creating tiler \n ")
-    tiler=Gst.ElementFactory.make("nvmultistreamtiler", "nvtiler")
-    if not tiler:
-        sys.stderr.write(" Unable to create tiler \n")
     print("Creating nvvidconv \n ")
     nvvidconv = Gst.ElementFactory.make("nvvideoconvert", "convertor")
     if not nvvidconv:
         sys.stderr.write(" Unable to create nvvidconv \n")
-    print("Creating nvosd \n ")
-    nvosd = Gst.ElementFactory.make("nvdsosd", "onscreendisplay")
-    if not nvosd:
-        sys.stderr.write(" Unable to create nvosd \n")
-    nvosd.set_property('process-mode',OSD_PROCESS_MODE)
-    nvosd.set_property('display-text',OSD_DISPLAY_TEXT)
+    no_display = True
 
 
     if no_display:
@@ -291,14 +258,6 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
         sink = Gst.ElementFactory.make("fakesink", "fakesink")
         sink.set_property('enable-last-sample', 0)
         sink.set_property('sync', 0)
-    else:
-        if(is_aarch64()):
-            print("Creating transform \n ")
-            transform=Gst.ElementFactory.make("nvegltransform", "nvegl-transform")
-            if not transform:
-                sys.stderr.write(" Unable to create transform \n")
-        print("Creating EGLSink \n")
-        sink = Gst.ElementFactory.make("nveglglessink", "nvvideo-renderer")
 
     if not sink:
         sys.stderr.write(" Unable to create sink element \n")
@@ -311,33 +270,18 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     streammux.set_property('height', 1080)
     streammux.set_property('batch-size', number_sources)
     streammux.set_property('batched-push-timeout', 4000000)
-    if requested_pgie == "nvinferserver" and config != None:
-        pgie.set_property('config-file-path', config)
-    elif requested_pgie == "nvinferserver-grpc" and config != None:
-        pgie.set_property('config-file-path', config)
-    elif requested_pgie == "nvinfer" and config != None:
-        pgie.set_property('config-file-path', config)
-    else:
-        pgie.set_property('config-file-path', "dstest3_pgie_config.txt")
+    pgie.set_property('config-file-path', config)
     pgie_batch_size=pgie.get_property("batch-size")
     if(pgie_batch_size != number_sources):
         print("WARNING: Overriding infer-config batch-size",pgie_batch_size," with number of sources ", number_sources," \n")
         pgie.set_property("batch-size",number_sources)
-    tiler_rows=int(math.sqrt(number_sources))
-    tiler_columns=int(math.ceil((1.0*number_sources)/tiler_rows))
-    tiler.set_property("rows",tiler_rows)
-    tiler.set_property("columns",tiler_columns)
-    tiler.set_property("width", TILED_OUTPUT_WIDTH)
-    tiler.set_property("height", TILED_OUTPUT_HEIGHT)
     sink.set_property("qos",0)
 
     print("Adding elements to Pipeline \n")
     pipeline.add(pgie)
     if nvdslogger:
         pipeline.add(nvdslogger)
-    pipeline.add(tiler)
     pipeline.add(nvvidconv)
-    pipeline.add(nvosd)
     if transform:
         pipeline.add(transform)
     pipeline.add(sink)
@@ -345,23 +289,14 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     print("Linking elements in the Pipeline \n")
     streammux.link(queue1)
     queue1.link(pgie)
-    pgie.link(queue2)
-    if nvdslogger:
-        queue2.link(nvdslogger)
-        nvdslogger.link(tiler)
-    else:
-        queue2.link(tiler)
-    tiler.link(queue3)
+    pgie.link(queue3)
     queue3.link(nvvidconv)
     nvvidconv.link(queue4)
-    queue4.link(nvosd)
     if transform:
-        nvosd.link(queue5)
-        queue5.link(transform)
+        queue4.link(transform)
         transform.link(sink)
     else:
-        nvosd.link(queue5)
-        queue5.link(sink)   
+        queue4.link(sink)
 
     # create an event loop and feed gstreamer bus mesages to it
     loop = GLib.MainLoop()
@@ -383,7 +318,7 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
         print(i, ": ", source)
 
     print("Starting pipeline \n")
-    # start play back and listed to events		
+    # start play back and listed to events
     pipeline.set_state(Gst.State.PLAYING)
     try:
         loop.run()
