@@ -288,8 +288,13 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     streammux.link(queue1)
     queue1.link(pgie)
     pgie.link(queue2)
-    queue2.link(nvdslogger)
-    nvdslogger.link(nvvidconv)
+    if nvdslogger:
+        queue2.link(nvdslogger)
+        nvdslogger.link(nvvidconv)
+
+    else:
+        queue2.link(nvvidconv)
+
     nvvidconv.link(queue3)
     if transform:
         queue3.link(transform)
@@ -416,4 +421,3 @@ def parse_args():
 if __name__ == '__main__':
     stream_paths, pgie, config, disable_probe = parse_args()
     sys.exit(main(stream_paths, pgie, config, disable_probe))
-
