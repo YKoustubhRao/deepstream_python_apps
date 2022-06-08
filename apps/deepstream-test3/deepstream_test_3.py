@@ -224,13 +224,9 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     queue1=Gst.ElementFactory.make("queue","queue1")
     queue2=Gst.ElementFactory.make("queue","queue2")
     queue3=Gst.ElementFactory.make("queue","queue3")
-    queue4=Gst.ElementFactory.make("queue","queue4")
-    queue5=Gst.ElementFactory.make("queue","queue5")
     pipeline.add(queue1)
     pipeline.add(queue2)
     pipeline.add(queue3)
-    pipeline.add(queue4)
-    pipeline.add(queue5)
 
     nvdslogger = None
     transform = None
@@ -250,9 +246,8 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     nvvidconv = Gst.ElementFactory.make("nvvideoconvert", "convertor")
     if not nvvidconv:
         sys.stderr.write(" Unable to create nvvidconv \n")
+
     no_display = True
-
-
     if no_display:
         print("Creating Fakesink \n")
         sink = Gst.ElementFactory.make("fakesink", "fakesink")
@@ -270,7 +265,10 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     streammux.set_property('height', 1080)
     streammux.set_property('batch-size', number_sources)
     streammux.set_property('batched-push-timeout', 4000000)
-    pgie.set_property('config-file-path', config)
+    if requested_pgie == "nvinfer" and config != None:
+        pgie.set_property('config-file-path', config)
+    else:
+        pgie.set_property('config-file-path', "dstest3_pgie_config.txt")
     pgie_batch_size=pgie.get_property("batch-size")
     if(pgie_batch_size != number_sources):
         print("WARNING: Overriding infer-config batch-size",pgie_batch_size," with number of sources ", number_sources," \n")
@@ -289,14 +287,15 @@ def main(args, requested_pgie=None, config=None, disable_probe=False):
     print("Linking elements in the Pipeline \n")
     streammux.link(queue1)
     queue1.link(pgie)
-    pgie.link(queue3)
-    queue3.link(nvvidconv)
-    nvvidconv.link(queue4)
+    pgie.link(queue2)
+    queue2.link(nvdslogger)
+    nvdslogger.link(nvvidconv)
+    nvvidconv.link(queue3)
     if transform:
-        queue4.link(transform)
+        queue3.link(transform)
         transform.link(sink)
     else:
-        queue4.link(sink)
+        queue3.link(sink)
 
     # create an event loop and feed gstreamer bus mesages to it
     loop = GLib.MainLoop()
